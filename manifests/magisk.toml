@@ -1,0 +1,130 @@
+name = "Magisk"
+version = "27.0"
+
+[[sources]]
+file-name = "magisk-{version}.zip"
+url = "https://github.com/topjohnwu/Magisk/releases/download/v{version}/Magisk-v{version}.apk"
+checksum.sha256 = "f511bd33d3242911d05b0939f910a3133ef2ba0e0ff1e098128f9f3cd0c16610"
+build.cmd = ["bsdtar", "-x", "-p", "-f", "{file_name}"]
+
+[[contents]]
+path = "{overlay}/system/etc/init/magisk"
+type = "directory"
+
+[[contents]]
+path = "{overlay}/sbin"
+type = "directory"
+
+[[contents]]
+path = "{overlay}/system/etc/init/magisk/busybox"
+source = "{srcdir}/lib/x86_64/libbusybox.so"
+type = "file"
+mode = 0o755
+
+[[contents]]
+path = "{overlay}/system/etc/init/magisk/magisk64"
+source = "{srcdir}/lib/x86_64/libmagisk64.so"
+type = "file"
+mode = 0o755
+
+[[contents]]
+path = "{overlay}/system/etc/init/magisk/magiskboot"
+source = "{srcdir}/lib/x86_64/libmagiskboot.so"
+type = "file"
+mode = 0o755
+
+[[contents]]
+path = "{overlay}/system/etc/init/magisk/magiskinit"
+source = "{srcdir}/lib/x86_64/libmagiskinit.so"
+type = "file"
+mode = 0o755
+
+[[contents]]
+path = "{overlay}/system/etc/init/magisk/magiskpolicy"
+source = "{srcdir}/lib/x86_64/libmagiskpolicy.so"
+type = "file"
+mode = 0o755
+
+[[contents]]
+path = "{overlay}/system/etc/init/magisk/magisk.apk"
+source = "{srcdir}/magisk-{version}.zip"
+type = "file"
+
+[[contents]]
+path = "{overlay}/system/etc/init/magisk/chromeos"
+source = "{srcdir}/assets/chromeos"
+type = "directory"
+
+[[contents]]
+path = "{overlay}/system/etc/init/magisk/addon.d.sh"
+source = "{srcdir}/assets/addon.d.sh"
+type = "file"
+
+[[contents]]
+path = "{overlay}/system/etc/init/magisk/boot_patch.sh"
+source = "{srcdir}/assets/boot_patch.sh"
+type = "file"
+
+[[contents]]
+path = "{overlay}/system/etc/init/magisk/util_functions.sh"
+source = "{srcdir}/assets/util_functions.sh"
+type = "file"
+
+[[contents]]
+path = "{overlay}/system/etc/init/bootanim.rc"
+content = """
+service bootanim /system/bin/bootanimation
+    class core animation
+    user graphics
+    group graphics audio
+    disabled
+    oneshot
+    ioprio rt 0
+    task_profiles MaxPerformance
+
+on post-fs-data
+    start logd
+    exec u:r:su:s0 root root -- /system/etc/init/magisk/magiskpolicy --live --magisk
+    exec u:r:magisk:s0 root root -- /system/etc/init/magisk/magiskpolicy --live --magisk
+    exec u:r:update_engine:s0 root root -- /system/etc/init/magisk/magiskpolicy --live --magisk
+    mkdir /dev/magisk_iqeoVo2mDrO 700
+    exec u:r:su:s0 root root -- /system/etc/init/magisk/magisk64 --auto-selinux --setup-sbin /system/etc/init/magisk /dev/magisk_iqeoVo2mDrO
+    exec u:r:su:s0 root root -- /dev/magisk_iqeoVo2mDrO/magisk --auto-selinux --post-fs-data
+
+on nonencrypted
+    exec u:r:su:s0 root root -- /dev/magisk_iqeoVo2mDrO/magisk --auto-selinux --service
+
+on property:vold.decrypt=trigger_restart_framework
+    exec u:r:su:s0 root root -- /dev/magisk_iqeoVo2mDrO/magisk --auto-selinux --service
+
+on property:sys.boot_completed=1
+    mkdir /data/adb/magisk 755
+    exec u:r:su:s0 root root -- /dev/magisk_iqeoVo2mDrO/magisk --auto-selinux --boot-complete
+
+on property:init.svc.zygote=restarting
+    exec u:r:su:s0 root root -- /dev/magisk_iqeoVo2mDrO/magisk --auto-selinux --zygote-restart
+
+on property:init.svc.zygote=stopped
+    exec u:r:su:s0 root root -- /dev/magisk_iqeoVo2mDrO/magisk --auto-selinux --zygote-restart
+"""
+type = "file"
+
+[[contents]]
+path = "{overlay}/system/etc/init/bootanim.rc.gz"
+content = """
+service bootanim /system/bin/bootanimation
+    class core animation
+    user graphics
+    group graphics audio
+    disabled
+    oneshot
+    ioprio rt 0
+    task_profiles MaxPerformance
+"""
+type = "file"
+compress = "gz"
+
+[[contents]]
+path = "{user_data}/adb/magisk"
+source = "{overlay}/system/etc/init/magisk"
+type = "directory"

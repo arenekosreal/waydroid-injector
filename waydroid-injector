@@ -1,0 +1,543 @@
+#!/usr/bin/python
+
+# /// script
+# requires-python = ">=3.12"
+# ///
+
+# pyright: reportAny=false
+
+"""Inject custom content described in a manifest into waydroid's data."""
+
+from os import geteuid
+from abc import ABC
+from abc import abstractmethod
+from gzip import open as gzip_open
+from shutil import copy2
+from shutil import rmtree
+from shutil import copytree
+from typing import Any
+from typing import Self
+from typing import Literal
+from typing import TypeGuard
+from typing import final
+from typing import get_args
+from typing import override
+from hashlib import sha256
+from logging import INFO
+from logging import DEBUG
+from logging import Formatter
+from logging import StreamHandler
+from logging import getLogger
+from pathlib import Path
+from tomllib import loads
+from argparse import Namespace
+from argparse import ArgumentParser
+from subprocess import run
+from dataclasses import field
+from dataclasses import dataclass
+from configparser import ConfigParser
+from urllib.request import urlopen
+from urllib.parse import urlparse
+
+
+__version__ = "0.1.0"
+
+_logger = getLogger(__name__)
+_logger.addHandler(StreamHandler())
+for handler in _logger.handlers:
+    handler.setFormatter(
+        Formatter(
+            "%(asctime)s-%(levelname)s-%(message)s",
+            "%Y-%m-%d %H:%M:%S",
+        )
+    )
+
+type ContentType = Literal["directory", "file", "link"]
+type CompressType = Literal["gz"]
+
+
+class Deserializable(ABC):
+    @property
+    @abstractmethod
+    def valid(self) -> bool:
+        raise NotImplementedError
+
+    @classmethod
+    @abstractmethod
+    def load(cls, data: dict[str, Any]) -> Self:
+        raise NotImplementedError
+
+    # @override
+    # def __setattr__(self, name: str, value: Any, /) -> None:
+    #     # TODO: Do runtime type check
+    #     return super().__setattr__(name, value)
+
+
+@final
+@dataclass
+class Build(Deserializable):
+    cmd: list[str] = field(default_factory=list)
+    shell: str | None = None
+
+    def build(self, srcdir: Path, file_name: str):
+        default_path = [
+            "/bin",
+            "/sbin",
+            "/usr/bin",
+            "/usr/sbin",
+            "/usr/local/bin",
+            "/usr/local/sbin",
+        ]
+        env = {"PATH": ":".join(default_path)}
+        if len(self.cmd) > 0:
+            cmd = [i.format(srcdir=srcdir, file_name=file_name) for i in self.cmd]
+            _logger.debug("Invoking command %s", cmd)
+            _ = run(cmd, cwd=srcdir, check=True, env=env)
+        elif self.shell is not None:
+            shell = self.shell.format(srcdir=srcdir, file_name=file_name)
+            _logger.debug("Running script in shell...")
+            _logger.debug("Script: %s", shell)
+            _ = run(shell, shell=True, check=True, env=env)
+
+    @property
+    @override
+    def valid(self) -> bool:
+        has_cmd = len(self.cmd) > 0
+        has_shell = self.shell is not None
+        return any([has_cmd, has_shell])
+
+    @classmethod
+    @override
+    def load(cls, data: dict[str, Any]) -> Self:
+        cmd: list[str] | None = data.get("cmd")
+        shell: str | None = data.get("shell")
+        return cls(cmd or [], shell)
+
+
+@final
+@dataclass
+class CheckSum(Deserializable):
+    sha256: str | None = None
+
+    def check(self, content: bytes) -> bool:
+        sha256_match = self.sha256 is None or sha256(content).hexdigest() == self.sha256
+        return all([sha256_match])
+
+    @property
+    @override
+    def valid(self) -> bool:
+        return any(i is not None for i in [self.sha256])
+
+    @classmethod
+    @override
+    def load(cls, data: dict[str, Any]) -> Self:
+        sha256_: str | None = data.get("sha256")
+        return cls(sha256_)
+
+
+@final
+@dataclass
+class Source(Deserializable):
+    file_name: str | None
+    checksum: CheckSum | None
+    build: Build | None
+    url: str | None = None
+    path: Path | None = None
+
+    def get(self, srcdir: Path, name: str, version: str):
+        url = (
+            self.url.format(name=name, version=version)
+            if self.url is not None
+            else None
+        )
+
+        path = (
+            Path(str(self.path).format(name=name, version=version))
+            if self.path is not None
+            else None
+        )
+        default_file_name = (
+            Path(urlparse(url).path).name
+            if url is not None
+            else path.name
+            if path is not None
+            else None
+        )
+        file_name = (
+            self.file_name.format(name=name, version=version)
+            if self.file_name is not None
+            else default_file_name
+        )
+        if file_name is None:
+            raise ValueError("Failed to get proper file name to save content.")
+
+        dst = srcdir / file_name
+        obtain = True
+        if dst.is_file():
+            if self.checksum is not None:
+                if self.checksum.check(dst.read_bytes()):
+                    _logger.info("Checksum match.")
+                    obtain = False
+                else:
+                    _logger.error("Checksum mismatch.")
+                    rmtree(dst) if dst.is_dir() else dst.unlink()
+            else:
+                _logger.warning("No Checksum is set.")
+                obtain = False
+            _logger.info("Found required source, skipping obtaining...")
+
+        if obtain:
+            if path is not None:
+                _logger.info("Obtaining %s from %s", file_name, path)
+                copy2(path, dst)
+            elif url is not None:
+                _logger.info("Obtaining %s from %s", file_name, url)
+                with urlopen(url) as resp:
+                    _ = dst.write_bytes(resp.read())
+            else:
+                raise RuntimeError("Does not know how to obtain this source.")
+            if self.checksum is not None and not self.checksum.check(dst.read_bytes()):
+                raise RuntimeError("Checksum mismatch.")
+
+        if self.build is not None:
+            self.build.build(srcdir, file_name)
+
+    @property
+    @override
+    def valid(self) -> bool:
+        return self.url is not None or (self.path is not None and self.path.exists())
+
+    @classmethod
+    @override
+    def load(cls, data: dict[str, Any]) -> Self:
+        file_name: str | None = data.get("file-name")
+        checksum_dict = data.get("checksum")
+        checksum = CheckSum.load(checksum_dict) if checksum_dict is not None else None
+        if checksum is not None and not checksum.valid:
+            raise ValueError("CheckSum is not valid.")
+        build_dict = data.get("build")
+        build = Build.load(build_dict) if build_dict is not None else None
+        if build is not None and not build.valid:
+            raise ValueError("Build is not valid.")
+        url: str | None = data.get("url")
+        path_str: str | None = data.get("path")
+        path = Path(path_str) if path_str is not None else None
+        return cls(file_name, checksum, build, url, path)
+
+
+@final
+@dataclass
+class Content(Deserializable):
+    path: Path
+    type_: ContentType
+    mode_override: int | None = None
+    source: Path | None = None
+    content: str | None = None
+    compress: CompressType | None = None
+
+    @property
+    def mode(self) -> int:
+        return self.mode_override or self.__default_mode
+
+    @property
+    def __default_mode(self) -> int:
+        match self.type_:
+            case "directory":
+                return 0o755
+            case "file":
+                return 0o644
+            case "link":
+                return 0o777
+
+    def create(
+        self,
+        srcdir: Path,
+        name: str,
+        version: str,
+        overlay: Path,
+        overlay_rw: Path,
+        user_data: Path,
+    ):
+        path = Path(
+            str(self.path).format(
+                overlay=overlay,
+                overlay_rw=overlay_rw,
+                user_data=user_data,
+            )
+        )
+        source = (
+            Path(
+                str(self.source).format(
+                    srcdir=srcdir,
+                    name=name,
+                    version=version,
+                    overlay=overlay,
+                    overlay_rw=overlay_rw,
+                    user_data=user_data,
+                )
+            )
+            if self.source is not None
+            else None
+        )
+
+        path.parent.mkdir(exist_ok=True, parents=True)
+        if self.content is not None:
+            match self.compress:
+                case "gz":
+                    _logger.debug("Compressing content with gzip...")
+                    with gzip_open(path, "wt") as writer:
+                        _ = writer.write(self.content)
+                case None:
+                    _logger.debug("Writing content without compression...")
+                    _ = path.write_text(self.content)
+        elif source is not None:
+            match self.type_:
+                case "directory":
+                    _logger.debug("Copying directory from %s to %s...", source, path)
+                    copytree(source, path, dirs_exist_ok=True)
+                case "file":
+                    _logger.debug("Copying file from %s to %s...", source, path)
+                    copy2(source, path)
+                case "link":
+                    _logger.debug(
+                        "Creating symbolic link at %s points to %s", path, source
+                    )
+                    path.symlink_to(source)
+        elif self.type_ == "directory":
+            _logger.debug("Creating empty directory at %s", path)
+            path.mkdir(parents=True, exist_ok=True)
+
+        if path.lstat().st_mode & 0o777 != self.mode:
+            _logger.debug("Changing mode to %o", self.mode)
+            path.lchmod(self.mode)
+
+    def remove(
+        self,
+        overlay: Path,
+        overlay_rw: Path,
+        user_data: Path,
+    ):
+        path = Path(
+            str(self.path).format(
+                overlay=overlay,
+                overlay_rw=overlay_rw,
+                user_data=user_data,
+            )
+        )
+        match self.type_:
+            case "directory":
+                _logger.debug("Removing directory %s...", path)
+                rmtree(path)
+            case "file" | "link":
+                _logger.debug("Removing file/link %s...", path)
+                path.unlink()
+
+    @property
+    @override
+    def valid(self) -> bool:
+        return (
+            self.content is not None
+            or self.source is not None
+            or self.type_ == "directory"
+        )
+
+    @classmethod
+    @override
+    def load(cls, data: dict[str, Any]) -> Self:
+        path_str: str | None = data.get("path")
+        if path_str is None:
+            raise ValueError("Content.path should not be None.")
+        path = Path(path_str)
+        type_str = data.get("type")
+
+        def ensure_type(i: Any) -> TypeGuard[ContentType]:
+            return i in get_args(ContentType.__value__)
+
+        if not ensure_type(type_str):
+            raise ValueError("Content.type is not valid.")
+        type_ = type_str
+        mode_override: int | None = data.get("mode")
+        source_str: str | None = data.get("source")
+        source = Path(source_str) if source_str is not None else None
+        content: str | None = data.get("content")
+
+        def ensure_compress(i: Any) -> TypeGuard[CompressType | None]:
+            return i is None or i in get_args(CompressType.__value__)
+
+        compress_str = data.get("compress")
+        if not ensure_compress(compress_str):
+            raise ValueError("Content.compress is not valid.")
+        compress = compress_str
+        return cls(path, type_, mode_override, source, content, compress)
+
+
+@final
+@dataclass
+class Manifest(Deserializable):
+    name: str
+    version: str
+    set_property: dict[str, str] = field(default_factory=dict)
+    sources: list[Source] = field(default_factory=list)
+    contents: list[Content] = field(default_factory=list)
+
+    def install(self, dry_run: bool, destdir: Path | None):
+        _logger.info("Installing %s version %s...", self.name, self.version)
+        euid_root = 0
+        fallback_cfg = Path("/var/lib/waydroid/waydroid.cfg")
+        fallback_prop = Path("/var/lib/waydroid/waydroid.prop")
+        slash = destdir if destdir is not None else Path("/")
+        waydroid = slash / "var/lib/waydroid"
+        overlay = waydroid / "overlay"
+        overlay_rw = waydroid / "overlay_rw"
+        cfg = waydroid / "waydroid.cfg"
+        prop = waydroid / "waydroid.prop"
+        parser = ConfigParser()
+        _ = parser.read(cfg if cfg.is_file() else fallback_cfg)
+        if not dry_run and geteuid() != euid_root:
+            raise PermissionError("Root permission is required.")
+        if not parser.getboolean("waydroid", "mount_overlays"):
+            raise ValueError("waydroid.mount_overlays should be True in {}".format(cfg))
+
+        prop_dict = dict(
+            line.split("=", 1)
+            for line in (prop if prop.is_file() else fallback_prop)
+            .read_text()
+            .splitlines()
+        )
+        user_data = slash / Path(prop_dict["waydroid.host_data_path"]).relative_to("/")
+
+        srcdir = (
+            waydroid
+            / "injector"
+            / "{name}-{version}".format(name=self.name, version=self.version)
+        )
+        for source in self.sources:
+            srcdir.mkdir(parents=True, exist_ok=True)
+            source.get(srcdir, self.name, self.version)
+
+        for content in self.contents:
+            content.create(
+                srcdir,
+                self.name,
+                self.version,
+                overlay,
+                overlay_rw,
+                user_data,
+            )
+
+        for key, value in self.set_property.items():
+            _logger.debug("Setting property %s to %s...", key, value)
+            parser.set("properties", key, value)
+
+        if not dry_run:
+            with cfg.open("w") as writer:
+                parser.write(writer)
+
+    def uninstall(self, dry_run: bool, destdir: Path | None):
+        _logger.info("Removing %s version %s...", self.name, self.version)
+        euid_root = 0
+        fallback_cfg = Path("/var/lib/waydroid/waydroid.cfg")
+        fallback_prop = Path("/var/lib/waydroid/waydroid.prop")
+        slash = destdir if destdir is not None else Path("/")
+        waydroid = slash / "var/lib/waydroid"
+        overlay = waydroid / "overlay"
+        overlay_rw = waydroid / "overlay_rw"
+        cfg = waydroid / "waydroid.cfg"
+        prop = waydroid / "waydroid.prop"
+        parser = ConfigParser()
+        _ = parser.read(cfg if cfg.is_file() else fallback_cfg)
+        if not dry_run and geteuid() != euid_root:
+            raise PermissionError("Root permission is required.")
+        if not parser.getboolean("waydroid", "mount_overlays"):
+            raise ValueError("waydroid.mount_overlays should be True in {}".format(cfg))
+
+        prop_dict = dict(
+            line.split("=", 1)
+            for line in (prop if prop.is_file() else fallback_prop)
+            .read_text()
+            .splitlines()
+        )
+        user_data = slash / Path(prop_dict["waydroid.host_data_path"]).relative_to("/")
+
+        for content in self.contents:
+            content.remove(overlay, overlay_rw, user_data)
+
+        for key, value in self.set_property.items():
+            _logger.debug("Removing property %s with value %s...", key, value)
+            if (
+                parser.has_option("properties", key)
+                and parser.get("properties", key) == value
+            ):
+                _ = parser.remove_option("properties", key)
+        if not dry_run:
+            with cfg.open("w") as writer:
+                parser.write(writer)
+
+    @property
+    @override
+    def valid(self) -> bool:
+        return len(self.sources) > 0 and len(self.contents) > 0
+
+    @classmethod
+    @override
+    def load(cls, data: dict[str, Any]) -> Self:
+        name: str | None = data.get("name")
+        if name is None:
+            raise ValueError("Manifest.name should not be None.")
+        version = data.get("version")
+        if version is None:
+            raise ValueError("Manifest.version should not be None.")
+        set_property: dict[str, str] = data.get("set-property", {})
+        sources: list[Source] = [Source.load(i) for i in data.get("sources", [])]
+        contents: list[Content] = [Content.load(i) for i in data.get("contents", [])]
+        return cls(name, version, set_property, sources, contents)
+
+
+def _install(args: Namespace):
+    data = loads(args.manifest.read_text())
+    manifest = Manifest.load(data)
+    if not manifest.valid:
+        raise ValueError("Manifest is not valid.")
+    manifest.install(args.dry_run, Path("slash") if args.dry_run else args.destdir)
+
+
+def _uninstall(args: Namespace):
+    data = loads(args.manifest.read_text())
+    manifest = Manifest.load(data)
+    if not manifest.valid:
+        raise ValueError("Manifest is not valid.")
+    manifest.uninstall(args.dry_run, Path("slash") if args.dry_run else args.destdir)
+
+
+def _main():
+    root = ArgumentParser(description=__doc__)
+    _ = root.add_argument("-v", "--version", action="version", version=__version__)
+    _ = root.add_argument(
+        "-d", "--dry-run", action="store_true", help="skip actual changes."
+    )
+    _ = root.add_argument(
+        "-e", "--debug", action="store_true", help="enable debug mode."
+    )
+    _ = root.add_argument("-s", "--destdir", type=Path, help="destination to rootfs.")
+    operations = root.add_subparsers(required=True)
+    install = operations.add_parser(
+        "install", help="Install the manifest into waydroid's data."
+    )
+    _ = install.add_argument("manifest", type=Path, help="the path to the manifest.")
+    install.set_defaults(func=_install)
+    uninstall = operations.add_parser(
+        "uninstall",
+        help="Uninstall the manifest from waydroid's data.",
+    )
+    _ = uninstall.add_argument("manifest", type=Path, help="the path to the manifest.")
+    uninstall.set_defaults(func=_uninstall)
+
+    args = root.parse_args()
+    _logger.setLevel(DEBUG if args.debug else INFO)
+    for handler in _logger.handlers:
+        handler.setLevel(_logger.level)
+    args.func(args)
+
+
+if __name__ == "__main__":
+    _main()

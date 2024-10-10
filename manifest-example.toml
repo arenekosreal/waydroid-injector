@@ -1,0 +1,32 @@
+name = "" # Required, the name of this manifest. Usually it is the name of the program.
+version = "" # Required, the version of this manifest. Usually it is the version of the program.
+
+[set-property]
+# Optional, this table will be added into `properties` section of /var/lib/waydroid/waydroid.cfg
+
+[[sources]]
+# one of path and url must be specified.
+# checksum and build can also be not specified.
+file-name = ""                      # Optional, the name of file under {srcdir}. Default value will be extracted from url or path. Available variables: {name} {version}
+url = ""                            # Optional, the url to the file. Available variables: {name} {version}
+checksum.sha256 = ""                # Optional, the sha256 of file.
+# If both cmd and shell are specified, cmd will be executed and shell will be ignored.
+# PATH is set to /bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
+# Both cmd and shell are sent to subprocess.run with stripped env,
+# env does only contain PATH,
+# shell is invoked with shell=True
+build.cmd = ["program", "arg1"]     # Optional, the command to build file. Command will be executed with cwd set to {srcdir}. Available variables: {srcdir} {file_name}
+build.shell = "call something"      # Optional, the shell script to build file. Script will be executed with cwd set to {srcdir}. Available variables: {srcdir} {file_name}
+path = ""                           # Optional, the path to the file. Available variables: {name} {version}
+
+[[contents]]
+# one of source and content must be specified if type is file.
+# source must be specified if type is link.
+# content will be ignored if type is link or directory.
+# compress is only working when content is specified.
+path = ""                           # Required, the path to the file/directory to be written. Available variables: {overlay} {overlay_rw} {user_data}
+type = ""                           # Required, the type of the file/directory. Available values: directory file link
+mode = 0o644                        # Optional, the mode of the file/directory. Default value: 0o644 if is file, 0o755 if is directory, 0o777 if is link.
+source = ""                         # Optional, the place to get the file/directory. Available variables: {overlay} {overlay_rw} {user_data} {srcdir} {name} {version}
+content = ""                        # Optional, the content of the file.
+compress = ""                       # Optional, how to compress content. Available values: gz
