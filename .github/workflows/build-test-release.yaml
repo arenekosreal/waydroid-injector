@@ -1,0 +1,34 @@
+name: "Build, Test and Release"
+on:
+  push:
+    branches:
+      - "main"
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  pull_request:
+    branches:
+      - "main"
+  workflow_dispatch:
+jobs:
+  build-test-and-release:
+    name: "Build, test and release project"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@v4"
+      - name: "Setup pdm"
+        uses: "pdm-project/setup-pdm@v4"
+      - name: "Install dependencies"
+        run: pdm install --dev
+      - name: "Build project"
+        run: pdm build
+      - name: "Test project"
+        env:
+          RUFF_OUTPUT_FORMAT: "github"
+        run: pdm run pytest
+      - name: "Release project"
+        if: github.ref_type == 'tag'
+        uses: "softprops/action-gh-release@v2"
+        with:
+          files: "dist/*"
+          generate_release_notes: true

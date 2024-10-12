@@ -1,0 +1,105 @@
+[project]
+name = "waydroid-injector"
+description = "Inject custom content described in a manifest into waydroid's data."
+authors = [
+    {name = "arenekosreal", email = "17194552+arenekosreal@users.noreply.github.com"},
+]
+dependencies = []
+requires-python = ">=3.12"
+readme = "README.md"
+license = {file="LICENSE.txt"}
+dynamic = ["version"]
+keywords = ["waydroid"]
+
+[project.scripts]
+waydroid-injector = "waydroid_injector.__main__:main"
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+
+[tool.pdm]
+distribution = true
+
+[tool.pdm.version]
+source = "file"
+path = "src/waydroid_injector/__init__.py"
+
+[tool.pdm.dev-dependencies]
+test = [
+    "pytest-cov>=5.0.0",
+    "pytest-ruff>=0.4.1",
+]
+[tool.pytest.ini_options]
+addopts = "--cov=src/waydroid_injector --ruff"
+required_plugins = "pytest-ruff pytest-cov"
+
+[tool.basedpyright]
+typeCheckingMode = "all"
+
+[tool.ruff]
+extend-exclude = [
+    "__pycache__",
+    ".pdm-build",
+]
+output-format = "grouped"
+
+[tool.ruff.lint]
+select = [
+    "F", # Pyflakes
+    "E", "W", # pycodestyle, Error, Warning
+    "I", # isort
+    "N", # pep8-naming
+    "D", # pydocstyle
+    "ANN", # flake8-annotations
+    "ASYNC", # flake8-async
+    "S", # flake8-bandit
+    "B", # flake8-bugbear
+    "A", # flake8-builtins
+    "COM", # flake8-commas
+    "C4", # flake8-comprehensions
+    "ISC", # flake8-implicit-str-concat
+    "T20", # flake8-print
+    "PT", # flake8-pytest-style
+    "Q", # flake8-quotes
+    "RSE", # flake8-raise
+    "RET", # flake8-return
+    "SIM", # flake8-simplify
+    "ARG", # flake8-unused-arguments
+    "PTH", # flake8-use-pathlib
+    "FIX", # flake8-fixme
+    "ERA", # eradicate
+    "PL", # Pylint
+    "R", # Refactor
+    "FLY", # flynt
+    "FURB", # refurb
+    "LOG", # flake8-logging
+    "RUF", # Ruff specific
+]
+ignore = [
+    "ANN101", # type for self
+    "ANN102", # type for cls
+    "FIX002", # todo is not critical,
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**.py" = ["S101"] # Assert in tests
+
+[tool.ruff.lint.flake8-annotations]
+mypy-init-return = true
+suppress-dummy-args = true
+suppress-none-returning = true
+
+[tool.ruff.lint.isort]
+force-single-line = true
+length-sort = true
+length-sort-straight = true
+lines-after-imports = 2
+no-sections = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+docstring-code-format = true
