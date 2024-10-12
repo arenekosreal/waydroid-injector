@@ -13,6 +13,8 @@ jobs:
   build-test-and-release:
     name: "Build, test and release project"
     runs-on: "ubuntu-latest"
+    permissions:
+      contents: "write"
     steps:
       - name: "Checkout"
         uses: "actions/checkout@v4"
