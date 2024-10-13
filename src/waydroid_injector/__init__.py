@@ -23,7 +23,7 @@ from waydroid_injector.manifest import Manifest
 from waydroid_injector.type_defines import EntrypointFunctionType
 
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 
 def _type_accepted(i: Any, *ts: type | None) -> bool:  # noqa: ANN401
