@@ -2,7 +2,11 @@
 
 # pyright: reportAny=false
 
+from types import UnionType
+from typing import Any
 from typing import TypeGuard
+from typing import get_args
+from typing import get_origin
 from inspect import signature
 from logging import INFO
 from logging import DEBUG
@@ -22,6 +26,14 @@ from waydroid_injector.type_defines import EntrypointFunctionType
 __version__ = "0.1.0"
 
 
+def _type_accepted(i: Any, *ts: type | None) -> bool:  # noqa: ANN401
+    if i in ts:
+        return True
+    if get_origin(i) is UnionType:
+        return any(t in get_args(i) for t in ts)
+    return False
+
+
 def is_entrypoint(o: object) -> TypeGuard[EntrypointFunctionType]:
     """Check if object is valid entrypoint function."""
     if not callable(o):
@@ -35,10 +47,10 @@ def is_entrypoint(o: object) -> TypeGuard[EntrypointFunctionType]:
         parameter.kind == parameter.POSITIONAL_OR_KEYWORD
         for parameter in parameters[:required_parameters_count]
     )
-
-    parameters_type_correct = (
-        parameters[0].annotation is bool and parameters[1].annotation is Path
-    )
+    parameters_type_correct = _type_accepted(
+        parameters[0].annotation,
+        bool,
+    ) and _type_accepted(parameters[1].annotation, Path, None)
     parameters_correct = parameters_kind_correct and parameters_type_correct
     returns_correct = (
         sig.return_annotation is None or sig.return_annotation is sig.empty
