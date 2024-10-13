@@ -1,6 +1,7 @@
 """Install/Uninstall custom contents."""
 
 from os import geteuid
+from shutil import rmtree
 from typing import Any
 from typing import Self
 from typing import final
@@ -72,8 +73,8 @@ class Manifest(Deserializable):
             / "injector"
             / "{name}-{version}".format(name=self.name, version=self.version)
         )
+        srcdir.mkdir(parents=True, exist_ok=True)
         for source in self.sources:
-            srcdir.mkdir(parents=True, exist_ok=True)
             source.get(srcdir, self.name, self.version)
 
         for content in self.contents:
