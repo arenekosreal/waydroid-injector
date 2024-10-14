@@ -127,7 +127,9 @@ class Manifest(Deserializable):
         )
         user_data = slash / Path(prop_dict["waydroid.host_data_path"]).relative_to("/")
 
-        for content in self.contents:
+        contents = self.contents.copy()
+        contents.reverse()
+        for content in contents:
             content.remove(overlay, overlay_rw, user_data)
 
         for key, value in self.set_property.items():
