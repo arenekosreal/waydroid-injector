@@ -172,7 +172,7 @@ class Content(Deserializable):
                 user_data=user_data,
             ),
         )
-        if path.exists():
+        if path.exists(follow_symlinks=False):
             match self.type_:
                 case "directory":
                     logger.debug("Removing directory %s...", path)
