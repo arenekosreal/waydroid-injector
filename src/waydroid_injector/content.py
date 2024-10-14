@@ -172,13 +172,16 @@ class Content(Deserializable):
                 user_data=user_data,
             ),
         )
-        match self.type_:
-            case "directory":
-                logger.debug("Removing directory %s...", path)
-                rmtree(path)
-            case "file" | "link":
-                logger.debug("Removing file/link %s...", path)
-                path.unlink()
+        if path.exists():
+            match self.type_:
+                case "directory":
+                    logger.debug("Removing directory %s...", path)
+                    rmtree(path)
+                case "file" | "link":
+                    logger.debug("Removing file/link %s...", path)
+                    path.unlink()
+        else:
+            logger.warning("%s is not found.", path)
 
     @property
     @override
