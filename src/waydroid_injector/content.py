@@ -142,6 +142,8 @@ class Content(Deserializable):
                         path,
                         source,
                     )
+                    if path.exists():
+                        rmtree(path) if path.is_dir() else path.unlink()
                     path.symlink_to(source, source.is_dir())
         elif self.type_ == "directory":
             logger.debug("Creating empty directory at %s", path)
