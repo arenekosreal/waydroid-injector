@@ -142,7 +142,7 @@ class Content(Deserializable):
                         path,
                         source,
                     )
-                    path.symlink_to(source)
+                    path.symlink_to(source, source.is_dir())
         elif self.type_ == "directory":
             logger.debug("Creating empty directory at %s", path)
             path.mkdir(parents=True, exist_ok=True)
