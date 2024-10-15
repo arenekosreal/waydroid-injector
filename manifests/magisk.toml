@@ -11,71 +11,77 @@ checksum.sha256 = "f511bd33d3242911d05b0939f910a3133ef2ba0e0ff1e098128f9f3cd0c16
 build.cmd = ["bsdtar", "-x", "-p", "-f", "{file_name}"]
 
 [[contents]]
-path = "{overlay}/system/etc/init/magisk"
+path = "{user_data}/adb/magisk"
 type = "directory"
 
 [[contents]]
-path = "{overlay}/system/etc/init/magisk/busybox"
+path = "{user_data}/adb/magisk/busybox"
 source = "{srcdir}/lib/x86_64/libbusybox.so"
 type = "file"
 mode = 0o755
 xattr."security.selinux" = "u:object_r:magisk_file:s0"
 
 [[contents]]
-path = "{overlay}/system/etc/init/magisk/magisk64"
+path = "{user_data}/adb/magisk/magisk64"
 source = "{srcdir}/lib/x86_64/libmagisk64.so"
 type = "file"
 mode = 0o755
 xattr."security.selinux" = "u:object_r:magisk_file:s0"
 
 [[contents]]
-path = "{overlay}/system/etc/init/magisk/magisk32"
+path = "{user_data}/adb/magisk/magisk32"
 source = "{srcdir}/lib/x86/libmagisk32.so"
 type = "file"
 mode = 0o755
 xattr."security.selinux" = "u:object_r:magisk_file:s0"
 
 [[contents]]
-path = "{overlay}/system/etc/init/magisk/magiskboot"
+path = "{user_data}/adb/magisk/magiskboot"
 source = "{srcdir}/lib/x86_64/libmagiskboot.so"
 type = "file"
 mode = 0o755
 xattr."security.selinux" = "u:object_r:magisk_file:s0"
 
 [[contents]]
-path = "{overlay}/system/etc/init/magisk/magiskinit"
+path = "{user_data}/adb/magisk/magiskinit"
 source = "{srcdir}/lib/x86_64/libmagiskinit.so"
 type = "file"
 mode = 0o755
 xattr."security.selinux" = "u:object_r:magisk_file:s0"
 
 [[contents]]
-path = "{overlay}/system/etc/init/magisk/magiskpolicy"
+path = "{user_data}/adb/magisk/magiskpolicy"
 source = "{srcdir}/lib/x86_64/libmagiskpolicy.so"
 type = "file"
 mode = 0o755
 xattr."security.selinux" = "u:object_r:magisk_file:s0"
 
 [[contents]]
-path = "{overlay}/system/etc/init/magisk/boot_patch.sh"
+path = "{user_data}/adb/magisk/boot_patch.sh"
 source = "{srcdir}/assets/boot_patch.sh"
 type = "file"
 xattr."security.selinux" = "u:object_r:magisk_file:s0"
 
 [[contents]]
-path = "{overlay}/system/etc/init/magisk/util_functions.sh"
+path = "{user_data}/adb/magisk/util_functions.sh"
 source = "{srcdir}/assets/util_functions.sh"
 type = "file"
 xattr."security.selinux" = "u:object_r:magisk_file:s0"
 
 [[contents]]
-path = "{overlay}/system/etc/init/magisk/stub.apk"
+path = "{user_data}/adb/magisk/stub.apk"
 source = "{srcdir}/assets/stub.apk"
 type = "file"
 xattr."security.selinux" = "u:object_r:magisk_file:s0"
 
 [[contents]]
-path = "{overlay}/system/etc/init/magisk/loadpolicy.sh"
+path = "{user_data}/adb/magisk/addon.d.sh"
+source = "{srcdir}/assets/addon.d.sh"
+type = "file"
+xattr."security.selinux" = "u:object_r:magisk_file:s0"
+
+[[contents]]
+path = "{user_data}/adb/magisk/loadpolicy.sh"
 content = """
 #!/system/bin/sh
 
@@ -92,29 +98,52 @@ type = "file"
 xattr."security.selinux" = "u:object_r:magisk_file:s0"
 
 [[contents]]
-path = "{overlay}/system/etc/init/magisk/magisk"
+path = "{user_data}/adb/magisk/magisk"
 source = "magisk64"
 type = "link"
 
 [[contents]]
-path = "{overlay}/system/etc/init/magisk/su"
+path = "{user_data}/adb/magisk/su"
 source = "magisk64"
 type = "link"
 
 [[contents]]
-path = "{overlay}/system/etc/init/magisk/resetprop"
+path = "{user_data}/adb/magisk/resetprop"
 source = "magisk64"
 type = "link"
+
+[[contents]]
+path = "{user_data}/adb/magisk/chromeos"
+type = "directory"
+
+[[contents]]
+path = "{user_data}/adb/magisk/chromeos/futility"
+source = "{srcdir}/assets/chromeos/futility"
+type = "file"
+xattr."security.selinux" = "u:object_r:magisk_file:s0"
+
+[[contents]]
+path = "{user_data}/adb/magisk/chromeos/kernel_data_key.vbprivk"
+source = "{srcdir}/assets/chromeos/kernel_data_key.vbprivk"
+type = "file"
+xattr."security.selinux" = "u:object_r:magisk_file:s0"
+
+[[contents]]
+path = "{user_data}/adb/magisk/chromeos/kernel.keyblock"
+source = "{srcdir}/assets/chromeos/kernel.keyblock"
+type = "file"
+xattr."security.selinux" = "u:object_r:magisk_file:s0"
 
 [[contents]]
 path = "{overlay}/system/etc/init/magisk.rc"
 content = """
 on post-fs-data
-    mkdir /run/magisk-workdir
-    mkdir /run/magisk-upperdir
-    mount overlay overlay /debug_ramdisk lowerdir=/etc/init/magisk,upperdir=/run/magisk-upperdir,workdir=/run/magisk-workdir
+    mkdir /run/debug_ramdisk_rw 700
+    mkdir /run/debug_ramdisk_work 700
+    mount overlay overlay /debug_ramdisk lowerdir=/data/adb/magisk,upperdir=/run/debug_ramdisk_rw,workdir=/run/debug_ramdisk_work
     mkdir /debug_ramdisk/.magisk
     mkdir /debug_ramdisk/.magisk/mirror
+    mkdir /debug_ramdisk/.magisk/preinit
     mkdir /debug_ramdisk/.magisk/block
     mkdir /debug_ramdisk/.magisk/worker
     exec u:r:magisk:s0 0 0 -- /system/bin/sh /debug_ramdisk/loadpolicy.sh
