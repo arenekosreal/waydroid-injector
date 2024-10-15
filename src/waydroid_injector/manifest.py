@@ -1,7 +1,6 @@
 """Install/Uninstall custom contents."""
 
 from os import geteuid
-from shutil import rmtree
 from typing import Any
 from typing import Self
 from typing import final

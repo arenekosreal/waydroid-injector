@@ -30,3 +30,4 @@ mode = 0o644                        # Optional, the mode of the file/directory. 
 source = ""                         # Optional, the place to get the file/directory. Available variables: {overlay} {overlay_rw} {user_data} {srcdir} {name} {version}
 content = ""                        # Optional, the content of the file.
 compress = ""                       # Optional, how to compress content. Available values: gz
+xattr.key = "value"                 # Optional, set custom xattr(selinux.context, etc.)

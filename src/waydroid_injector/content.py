@@ -1,5 +1,9 @@
 """A content to be created/removed."""
 
+from os import XATTR_CREATE
+from os import XATTR_REPLACE
+from os import setxattr
+from os import listxattr
 from gzip import open as gzip_open
 from shutil import copy2
 from shutil import rmtree
@@ -12,6 +16,7 @@ from typing import get_args
 from typing import override
 from logging import getLogger
 from pathlib import Path
+from dataclasses import field
 from dataclasses import dataclass
 from waydroid_injector.type_defines import ContentType
 from waydroid_injector.type_defines import CompressType
@@ -47,6 +52,7 @@ class Content(Deserializable):
     source: Path | None = None
     content: str | None = None
     compress: CompressType | None = None
+    xattr: dict[str, str] = field(default_factory=dict)
 
     @property
     def mode(self) -> int:
@@ -151,6 +157,15 @@ class Content(Deserializable):
             logger.debug("Changing mode to %o", self.mode)
             path.lchmod(self.mode)
 
+        for key, value in self.xattr.items():
+            logger.debug("Setting xattr %s=%s", key, value)
+            flag = (
+                XATTR_REPLACE
+                if key in listxattr(path, follow_symlinks=False)
+                else XATTR_CREATE
+            )
+            setxattr(path, key, value.encode(), flag, follow_symlinks=False)
+
     def remove(
         self,
         overlay: Path,
@@ -219,4 +234,6 @@ class Content(Deserializable):
         if not ensure_compress(compress_str):
             raise ValueError("Content.compress is not valid.")
         compress = compress_str
-        return cls(path, type_, mode_override, source, content, compress)
+
+        xattr: dict[str, str] = data.get("xattr", {})
+        return cls(path, type_, mode_override, source, content, compress, xattr)
