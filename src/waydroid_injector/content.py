@@ -119,6 +119,8 @@ class Content(Deserializable):
         )
 
         path.parent.mkdir(exist_ok=True, parents=True)
+        if path.exists():
+            rmtree(path) if path.is_dir() else path.unlink()
         if self.content is not None:
             match self.compress:
                 case "gz":
@@ -142,8 +144,6 @@ class Content(Deserializable):
                         path,
                         source,
                     )
-                    if path.exists():
-                        rmtree(path) if path.is_dir() else path.unlink()
                     path.symlink_to(source, source.is_dir())
         elif self.type_ == "directory":
             logger.debug("Creating empty directory at %s", path)
