@@ -1,8 +1,11 @@
 # For x86_64 architecture only.
 # You need to install magisk manager yourself.
 
+# Extra requirements:
+#   1. libarchive: Extracting magisk binaries from apk.
+
 # Advantages:
-#   1. No ashmem required, you can use this without linux-xanmod-ashmem.
+#   1. No ashmem required, you can use this without linux-xanmod-anbox. But binderfs is still required.
 #   2. Vanilla magisk instead forks like Delta/Kitsule which may be close-sourced.
 # Disadvantages:
 #   1. No zygisk available.
