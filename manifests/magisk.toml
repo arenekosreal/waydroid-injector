@@ -1,6 +1,12 @@
 # For x86_64 architecture only.
 # You need to install magisk manager yourself.
 
+# Advantages:
+#   1. No ashmem required, you can use this without linux-xanmod-ashmem.
+#   2. Vanilla magisk instead forks like Delta/Kitsule which may be close-sourced.
+# Disadvantages:
+#   1. No zygisk available.
+
 name = "Magisk"
 version = "27.0"
 
@@ -131,7 +137,6 @@ content = """
 # So we use major:minor of loop device from system.img instead.
 
 # This should replace MAKEDEV=1 $MAGISKTMP/magisk --preinit-device 2>&1
-MAGISKPREINITDIR=/data/adb/modules
 MAGISKTMP=/debug_ramdisk
 
 device_block=$MAGISKTMP/.magisk/block/preinit
@@ -148,9 +153,7 @@ do
         break
     fi
 done
-#device=$(grep " $(stat -c %m $MAGISKPREINITDIR) " /proc/self/mountinfo | head -n 1 | cut -d " " -f 3)
-#major=$(cut -d : -f 1 <<< $device)
-#minor=$(cut -d : -f 2 <<< $device)
+
 if [ -z "$major" -o -z "$minor" ]
 then
     exit 1
