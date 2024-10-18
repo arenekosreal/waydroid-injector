@@ -98,21 +98,6 @@ type = "file"
 xattr."security.selinux" = "u:object_r:magisk_file:s0"
 
 [[contents]]
-path = "{user_data}/adb/magisk/magisk"
-source = "magisk64"
-type = "link"
-
-[[contents]]
-path = "{user_data}/adb/magisk/su"
-source = "magisk64"
-type = "link"
-
-[[contents]]
-path = "{user_data}/adb/magisk/resetprop"
-source = "magisk64"
-type = "link"
-
-[[contents]]
 path = "{user_data}/adb/magisk/chromeos"
 type = "directory"
 
@@ -135,7 +120,7 @@ type = "file"
 xattr."security.selinux" = "u:object_r:magisk_file:s0"
 
 [[contents]]
-path = "{overlay}/system/bin/magisk-init.sh"
+path = "{user_data}/adb/magisk/create-preinit-device.sh"
 content = """
 #!/system/bin/sh
 
@@ -179,22 +164,30 @@ fi
 mknod -m 600 "$device_block" b "$major" "$minor" 2>&1
 """
 type = "file"
+xattr."security.selinux" = "u:object_r:magisk_file:s0"
 
 [[contents]]
 path = "{overlay}/system/etc/init/magisk.rc"
 content = """
 on post-fs-data
-    mkdir /run/debug_ramdisk_rw 700
-    mkdir /run/debug_ramdisk_work 700
-    mount overlay overlay /debug_ramdisk lowerdir=/data/adb/magisk,upperdir=/run/debug_ramdisk_rw,workdir=/run/debug_ramdisk_work
+    mount tmpfs tmpfs /debug_ramdisk
+    chmod 0 /debug_ramdisk
     mkdir /debug_ramdisk/.magisk
     mkdir /debug_ramdisk/.magisk/mirror
     mkdir /debug_ramdisk/.magisk/preinit
     mkdir /debug_ramdisk/.magisk/block
     mkdir /debug_ramdisk/.magisk/worker
-    exec - 0 0 -- /system/bin/sh /system/bin/magisk-init.sh
+    exec - 0 0 -- /system/bin/cp --preserve=all -r /data/adb/magisk/. /debug_ramdisk
+    symlink magisk /debug_ramdisk/su
+    symlink magisk /debug_ramdisk/resetprop
+    symlink magisk64 /debug_ramdisk/magisk
+    symlink magiskpolicy /debug_ramdisk/supolicy
+    mount none /data/adb/modules /debug_ramdisk/.magisk/preinit bind
     exec u:r:magisk:s0 0 0 -- /system/bin/sh /debug_ramdisk/loadpolicy.sh
     exec u:r:magisk:s0 0 0 -- /debug_ramdisk/magisk --post-fs-data
+
+    # Magisk Manager checks if preinit device exists, but waydroid does not have one.
+    exec u:r:magisk:s0 0 0 -- /system/bin/sh /debug_ramdisk/create-preinit-device.sh
 
 on property:vold.decrypt=trigger_restart_framework
     exec u:r:magisk:s0 0 0 -- /debug_ramdisk/magisk --service
@@ -204,9 +197,6 @@ on nonencrypted
 
 on property:sys.boot_completed=1
     exec u:r:magisk:s0 0 0 -- /debug_ramdisk/magisk --boot-complete
-
-on property:init.svc.zygote=restarting
-    exec u:r:magisk:s0 0 0 -- /debug_ramdisk/magisk --zygote-restart
 
 on property:init.svc.zygote=stopped
     exec u:r:magisk:s0 0 0 -- /debug_ramdisk/magisk --zygote-restart
