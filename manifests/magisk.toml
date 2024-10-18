@@ -135,6 +135,52 @@ type = "file"
 xattr."security.selinux" = "u:object_r:magisk_file:s0"
 
 [[contents]]
+path = "{overlay}/system/bin/magisk-init.sh"
+content = """
+#!/system/bin/sh
+
+# This script emulates what magiskinit does.
+# Waydroid should be Legacy SAR init.
+# Its preinit directory mountpoint is /data
+# Its preinit partition is not exist because /data is a bind mount with waydroid.host_data_path.
+# So we use major:minor of loop device from system.img instead.
+
+# This should replace MAKEDEV=1 $MAGISKTMP/magisk --preinit-device 2>&1
+MAGISKPREINITDIR=/data/adb/modules
+MAGISKTMP=/debug_ramdisk
+
+device_block=$MAGISKTMP/.magisk/block/preinit
+major=""
+minor=""
+for file in /sys/dev/block/*/loop/backing_file
+do
+    backing_file=$(< $file)
+    if [ "$(basename $backing_file)" = "system.img" ]
+    then
+        uevent=$(dirname $file)/../uevent
+        major=$(grep MAJOR= $uevent | cut -d = -f 2)
+        minor=$(grep MINOR= $uevent | cut -d = -f 2)
+        break
+    fi
+done
+#device=$(grep " $(stat -c %m $MAGISKPREINITDIR) " /proc/self/mountinfo | head -n 1 | cut -d " " -f 3)
+#major=$(cut -d : -f 1 <<< $device)
+#minor=$(cut -d : -f 2 <<< $device)
+if [ -z "$major" -o -z "$minor" ]
+then
+    exit 1
+fi
+
+if [ "$major" -ne 7 ]
+then
+    exit 2
+fi
+
+mknod -m 600 "$device_block" b "$major" "$minor" 2>&1
+"""
+type = "file"
+
+[[contents]]
 path = "{overlay}/system/etc/init/magisk.rc"
 content = """
 on post-fs-data
@@ -146,6 +192,7 @@ on post-fs-data
     mkdir /debug_ramdisk/.magisk/preinit
     mkdir /debug_ramdisk/.magisk/block
     mkdir /debug_ramdisk/.magisk/worker
+    exec - 0 0 -- /system/bin/sh /system/bin/magisk-init.sh
     exec u:r:magisk:s0 0 0 -- /system/bin/sh /debug_ramdisk/loadpolicy.sh
     exec u:r:magisk:s0 0 0 -- /debug_ramdisk/magisk --post-fs-data
 
