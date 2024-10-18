@@ -1,6 +1,7 @@
 """Install/Uninstall custom contents."""
 
 from os import geteuid
+from os import listdir
 from typing import Any
 from typing import Self
 from typing import final
@@ -131,6 +132,12 @@ class Manifest(Deserializable):
         for content in contents:
             content.remove(overlay, overlay_rw, user_data)
 
+        partitions = ["system", "vendor"]
+        overlay_keeps = [overlay / partition for partition in partitions]
+        _ = self.__clean(overlay, overlay_keeps)
+        overlay_rw_keeps = [overlay_rw / partition for partition in partitions]
+        _ = self.__clean(overlay_rw, overlay_rw_keeps)
+
         for key, value in self.set_property.items():
             logger.debug("Removing property %s with value %s...", key, value)
             if (
@@ -141,6 +148,20 @@ class Manifest(Deserializable):
 
         with cfg.open("w") as writer:
             parser.write(writer)
+
+    def __clean(self, path: Path, keeps: list[Path]) -> bool:
+        logger = getLogger(__name__)
+        if path.is_dir() and all(keep.is_relative_to(path) for keep in keeps):
+            for item in listdir(path):
+                p = path / item
+                if p.is_dir():
+                    keeps_for_p = [
+                        keep for keep in keeps if keep != p and keep.is_relative_to(p)
+                    ]
+                    if self.__clean(p, keeps_for_p) and p not in keeps:
+                        logger.debug("Removing %s...", p)
+                        p.rmdir()
+        return len(listdir(path)) == 0
 
     @property
     @override

@@ -4,6 +4,7 @@ from os import XATTR_CREATE
 from os import XATTR_REPLACE
 from os import setxattr
 from os import listxattr
+from os import listdir
 from gzip import open as gzip_open
 from shutil import copy2
 from shutil import rmtree
@@ -192,8 +193,9 @@ class Content(Deserializable):
         if path.exists(follow_symlinks=False):
             match self.type_:
                 case "directory":
-                    logger.debug("Removing directory %s...", path)
-                    rmtree(path)
+                    if path.is_dir() and len(listdir(path)) == 0:
+                        logger.debug("Removing directory %s...", path)
+                        path.rmdir()
                 case "file" | "link":
                     logger.debug("Removing file/link %s...", path)
                     path.unlink()
