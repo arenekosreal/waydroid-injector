@@ -94,7 +94,6 @@ class Source(Deserializable):
             else:
                 logger.warning("No Checksum is set.")
                 obtain = False
-            logger.info("Found required source, skipping obtaining...")
 
         if obtain:
             if path is not None:
@@ -108,6 +107,8 @@ class Source(Deserializable):
                 raise RuntimeError("Does not know how to obtain this source.")
             if self.checksum is not None and not self.checksum.check(dst.read_bytes()):
                 raise RuntimeError("Checksum mismatch.")
+        else:
+            logger.info("Found required source, skipping obtaining...")
 
         if self.build is not None:
             self.build.build(srcdir, file_name)
