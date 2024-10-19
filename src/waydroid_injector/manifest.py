@@ -4,6 +4,7 @@ from os import geteuid
 from os import listdir
 from typing import Any
 from typing import Self
+from typing import ClassVar
 from typing import final
 from typing import override
 from logging import getLogger
@@ -14,6 +15,44 @@ from configparser import ConfigParser
 from waydroid_injector.source import Source
 from waydroid_injector.content import Content
 from waydroid_injector.deserializable import Deserializable
+
+
+@final
+@dataclass
+class _Environment:
+    EUID_ROOT = 0
+    FALLBACK_CFG: ClassVar[Path] = Path("/var/lib/waydroid/waydroid.cfg")
+    FALLBACK_PROP: ClassVar[Path] = Path("/var/lib/waydroid/waydroid.prop")
+
+    waydroid: Path
+    overlay: Path
+    overlay_rw: Path
+    user_data: Path
+    cfg: Path
+
+    @classmethod
+    def ensure_environment(cls, dry_run: bool, destdir: Path | None) -> Self:
+        if not dry_run and geteuid() != cls.EUID_ROOT:
+            raise PermissionError("Root permission is required.")
+        slash = destdir or Path("/")
+        waydroid = slash / "var/lib/waydroid"
+        overlay = waydroid / "overlay"
+        overlay_rw = waydroid / "overlay_rw"
+        cfg = waydroid / "waydroid.cfg"
+        prop = waydroid / "waydroid.prop"
+
+        parser = ConfigParser()
+        _ = parser.read(cfg if cfg.is_file() else cls.FALLBACK_CFG)
+        if not parser.getboolean("waydroid", "mount_overlays"):
+            raise ValueError("waydroid.mount_overlays should be True in {}".format(cfg))
+        prop_dict = dict(
+            line.split("=", 1)
+            for line in (prop if prop.is_file() else cls.FALLBACK_PROP)
+            .read_text()
+            .splitlines()
+        )
+        user_data = slash / Path(prop_dict["waydroid.host_data_path"]).relative_to("/")
+        return cls(waydroid, overlay, overlay_rw, user_data, cfg)
 
 
 @final
@@ -44,32 +83,10 @@ class Manifest(Deserializable):
         """
         logger = getLogger(__name__)
         logger.info("Installing %s version %s...", self.name, self.version)
-        euid_root = 0
-        fallback_cfg = Path("/var/lib/waydroid/waydroid.cfg")
-        fallback_prop = Path("/var/lib/waydroid/waydroid.prop")
-        slash = destdir if destdir is not None else Path("/")
-        waydroid = slash / "var/lib/waydroid"
-        overlay = waydroid / "overlay"
-        overlay_rw = waydroid / "overlay_rw"
-        cfg = waydroid / "waydroid.cfg"
-        prop = waydroid / "waydroid.prop"
-        parser = ConfigParser()
-        _ = parser.read(cfg if cfg.is_file() else fallback_cfg)
-        if not dry_run and geteuid() != euid_root:
-            raise PermissionError("Root permission is required.")
-        if not parser.getboolean("waydroid", "mount_overlays"):
-            raise ValueError("waydroid.mount_overlays should be True in {}".format(cfg))
-
-        prop_dict = dict(
-            line.split("=", 1)
-            for line in (prop if prop.is_file() else fallback_prop)
-            .read_text()
-            .splitlines()
-        )
-        user_data = slash / Path(prop_dict["waydroid.host_data_path"]).relative_to("/")
+        environment = _Environment.ensure_environment(dry_run, destdir)
 
         srcdir = (
-            waydroid
+            environment.waydroid
             / "injector"
             / "{name}-{version}".format(name=self.name, version=self.version)
         )
@@ -82,16 +99,19 @@ class Manifest(Deserializable):
                 srcdir,
                 self.name,
                 self.version,
-                overlay,
-                overlay_rw,
-                user_data,
+                environment.overlay,
+                environment.overlay_rw,
+                environment.user_data,
             )
 
+        parser = ConfigParser()
+        if environment.cfg.is_file():
+            _ = parser.read(environment.cfg)
         for key, value in self.set_property.items():
             logger.debug("Setting property %s to %s...", key, value)
             parser.set("properties", key, value)
 
-        with cfg.open("w") as writer:
+        with environment.cfg.open("w") as writer:
             parser.write(writer)
 
     def uninstall(self, dry_run: bool, destdir: Path | None):
@@ -103,41 +123,28 @@ class Manifest(Deserializable):
         """
         logger = getLogger(__name__)
         logger.info("Removing %s version %s...", self.name, self.version)
-        euid_root = 0
-        fallback_cfg = Path("/var/lib/waydroid/waydroid.cfg")
-        fallback_prop = Path("/var/lib/waydroid/waydroid.prop")
-        slash = destdir if destdir is not None else Path("/")
-        waydroid = slash / "var/lib/waydroid"
-        overlay = waydroid / "overlay"
-        overlay_rw = waydroid / "overlay_rw"
-        cfg = waydroid / "waydroid.cfg"
-        prop = waydroid / "waydroid.prop"
-        parser = ConfigParser()
-        _ = parser.read(cfg if cfg.is_file() else fallback_cfg)
-        if not dry_run and geteuid() != euid_root:
-            raise PermissionError("Root permission is required.")
-        if not parser.getboolean("waydroid", "mount_overlays"):
-            raise ValueError("waydroid.mount_overlays should be True in {}".format(cfg))
-
-        prop_dict = dict(
-            line.split("=", 1)
-            for line in (prop if prop.is_file() else fallback_prop)
-            .read_text()
-            .splitlines()
-        )
-        user_data = slash / Path(prop_dict["waydroid.host_data_path"]).relative_to("/")
+        environment = _Environment.ensure_environment(dry_run, destdir)
 
         contents = self.contents.copy()
         contents.reverse()
         for content in contents:
-            content.remove(overlay, overlay_rw, user_data)
+            content.remove(
+                environment.overlay,
+                environment.overlay_rw,
+                environment.user_data,
+            )
 
         partitions = ["system", "vendor"]
-        overlay_keeps = [overlay / partition for partition in partitions]
-        _ = self.__clean(overlay, overlay_keeps)
-        overlay_rw_keeps = [overlay_rw / partition for partition in partitions]
-        _ = self.__clean(overlay_rw, overlay_rw_keeps)
+        overlay_keeps = [environment.overlay / partition for partition in partitions]
+        _ = self.__clean(environment.overlay, overlay_keeps)
+        overlay_rw_keeps = [
+            environment.overlay_rw / partition for partition in partitions
+        ]
+        _ = self.__clean(environment.overlay_rw, overlay_rw_keeps)
 
+        parser = ConfigParser()
+        if environment.cfg.exists():
+            _ = parser.read(environment.cfg)
         for key, value in self.set_property.items():
             logger.debug("Removing property %s with value %s...", key, value)
             if (
@@ -146,7 +153,7 @@ class Manifest(Deserializable):
             ):
                 _ = parser.remove_option("properties", key)
 
-        with cfg.open("w") as writer:
+        with environment.cfg.open("w") as writer:
             parser.write(writer)
 
     def __clean(self, path: Path, keeps: list[Path]) -> bool:
