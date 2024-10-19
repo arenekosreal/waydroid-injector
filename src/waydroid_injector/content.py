@@ -2,9 +2,9 @@
 
 from os import XATTR_CREATE
 from os import XATTR_REPLACE
+from os import listdir
 from os import setxattr
 from os import listxattr
-from os import listdir
 from gzip import open as gzip_open
 from shutil import copy2
 from shutil import rmtree
