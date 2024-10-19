@@ -1,7 +1,6 @@
 """Obtain content for Manifest."""
 
 from shutil import copy2
-from shutil import rmtree
 from typing import Any
 from typing import Self
 from typing import final
@@ -91,7 +90,7 @@ class Source(Deserializable):
                     obtain = False
                 else:
                     logger.error("Checksum mismatch.")
-                    rmtree(dst) if dst.is_dir() else dst.unlink()
+                    dst.unlink()
             else:
                 logger.warning("No Checksum is set.")
                 obtain = False

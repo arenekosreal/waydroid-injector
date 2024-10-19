@@ -7,7 +7,6 @@ from os import setxattr
 from os import listxattr
 from gzip import open as gzip_open
 from shutil import copy2
-from shutil import rmtree
 from shutil import copytree
 from typing import Any
 from typing import Self
@@ -120,8 +119,9 @@ class Content(Deserializable):
         )
 
         path.parent.mkdir(exist_ok=True, parents=True)
-        if path.exists():
-            rmtree(path) if path.is_dir() else path.unlink()
+        if path.is_file():
+            logger.warning("File at %s exists.", path)
+
         if self.content is not None:
             match self.compress:
                 case "gz":
@@ -162,12 +162,15 @@ class Content(Deserializable):
 
         for key, value in self.xattr.items():
             logger.debug("Setting xattr %s=%s", key, value)
-            flag = (
+            setxattr(
+                path,
+                key,
+                value.encode(),
                 XATTR_REPLACE
                 if key in listxattr(path, follow_symlinks=False)
-                else XATTR_CREATE
+                else XATTR_CREATE,
+                follow_symlinks=False,
             )
-            setxattr(path, key, value.encode(), flag, follow_symlinks=False)
 
     def remove(
         self,
