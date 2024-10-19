@@ -4,7 +4,8 @@ Useful if you want to install huge number of files into waydroid's data.
 
 Usage:
     gen-contents-from-filesystem.py \
-        --prefix="{overlay}/system"
+        --prefix="{overlay}/system" \
+        --srcprefix="{srcdir}" \
         --manifest=/path/to/manifest.toml \
         --srcdir=/path/to/srcdir
 
