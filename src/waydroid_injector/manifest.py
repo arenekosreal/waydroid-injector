@@ -143,10 +143,11 @@ class Manifest(Deserializable):
         partitions = ["system", "vendor"]
         overlay_keeps = [environment.overlay / partition for partition in partitions]
         _ = self.__clean(environment.overlay, overlay_keeps)
-        overlay_rw_keeps = [
-            environment.overlay_rw / partition for partition in partitions
-        ]
-        _ = self.__clean(environment.overlay_rw, overlay_rw_keeps)
+        if environment.overlay_rw.is_dir():
+            overlay_rw_keeps = [
+                environment.overlay_rw / partition for partition in partitions
+            ]
+            _ = self.__clean(environment.overlay_rw, overlay_rw_keeps)
 
         parser = ConfigParser()
         if environment.cfg.exists():
@@ -182,7 +183,7 @@ class Manifest(Deserializable):
         logger = getLogger(__name__)
         if len(self.set_property) > 0:
             logger.info(
-                "Please run `waydroid upgrade` to let your custom property being applied correctly."
+                "Please run `waydroid upgrade` or `waydroid init --force` to let your custom property being applied correctly."
             )
 
     @property
