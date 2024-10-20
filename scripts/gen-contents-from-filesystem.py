@@ -101,19 +101,18 @@ def _main():
 
     data = parse(manifest.read_text()) if manifest.exists() else document()
     contents = data.get("contents")
-    if not isinstance(contents, AoT):
-        contents = aot()
-    for content in contents:
-        if isinstance(content, Table):
-            path = content.get("path")
-            if isinstance(path, str) and not path.startswith(prefix):
-                logger.debug(
-                    "Keeping existing item because it is not starts with prefix %s",
-                    prefix,
-                )
-                continue
+    new_contents = aot()
+    if isinstance(contents, AoT):
+        for content in contents:
+            if isinstance(content, Table):
+                path = content.get("path")
+                if isinstance(path, str) and not path.startswith(prefix):
+                    logger.debug(
+                        "Keeping existing item because it is not starts with prefix %s",
+                        prefix,
+                    )
+                    new_contents.append(dict(content))
 
-        contents.remove(content)
     for r, ds, fs in srcdir.walk():
         for d in ds:
             default_mode = 0o755
@@ -130,7 +129,7 @@ def _main():
             mode = (r / d).stat().st_mode & 0o777
             if mode != default_mode:
                 content["mode"] = value(oct(mode))
-            contents.append(content)
+            new_contents.append(content)
         for f in fs:
             if (r / f).is_file():
                 default_mode = 0o644
@@ -147,9 +146,9 @@ def _main():
                 mode = (r / f).stat().st_mode & 0o777
                 if mode != default_mode:
                     content["mode"] = value(oct(mode))
-                contents.append(content)
+                new_contents.append(content)
 
-    data.update(contents=contents)
+    data.update(contents=new_contents)
     _ = manifest.write_text(dumps(data))
 
 
