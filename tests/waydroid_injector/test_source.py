@@ -23,12 +23,17 @@ class TestSource:
         "file-name": "test.bin",
     }
 
-    def test_get(self, tmp_path: Path):
+    @pytest.fixture
+    def srcdir(self, tmp_path: Path) -> Path:
+        """Generate a srcdir for Source testing."""
+        p = tmp_path / "src"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    def test_get(self, tmp_path: Path, srcdir: Path):
         """Test Source.get function."""
         source_json = {"path": str(tmp_path / "test")}
         source = Source.load(source_json)
-        srcdir = tmp_path / "src"
-        srcdir.mkdir(parents=True, exist_ok=True)
         path = source_json["path"]
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -36,6 +41,28 @@ class TestSource:
         source.get(srcdir, "test", "1.0")
         f = srcdir / "test"
         assert f.exists()
+
+    def test_do_build(self, tmp_path: Path, srcdir: Path):
+        """Test Source.do_build function."""
+        source_json = {
+            "path": str(tmp_path / "test"),
+            "build": {"cmd": ["touch", "build"]},
+        }
+        source = Source.load(source_json)
+        source.do_build(srcdir, "test", "1.0")
+        assert (srcdir / "build").is_file()
+
+    def test_cleanup(self, srcdir: Path):
+        """Test Source.cleanup function."""
+        remove = srcdir / "remove"
+        exist = srcdir / "exist"
+        remove.touch()
+        exist.touch()
+        source_json = {"path": "/path/not/exist"}
+        source = Source.load(source_json)
+        source.cleanup(srcdir, "test", "1.0")
+        assert not remove.exists()
+        assert exist.exists()
 
     @pytest.mark.parametrize(
         ("data", "valid"),
