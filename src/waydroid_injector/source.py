@@ -123,7 +123,7 @@ class Source(Deserializable):
         file_name = self.__get_file_name(name, version)
         for fname in listdir(srcdir):
             if fname != file_name:
-                target = srcdir / name
+                target = srcdir / fname
                 logger.debug("Removing %s...", target)
                 rmtree(target) if target.is_dir() else target.unlink()
 
