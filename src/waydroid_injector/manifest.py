@@ -118,6 +118,8 @@ class Manifest(Deserializable):
         with environment.cfg.open("w") as writer:
             parser.write(writer)
 
+        self.__post_operation()
+
     def uninstall(self, dry_run: bool, destdir: Path | None):
         """Uninstall the manifest.
 
@@ -160,6 +162,8 @@ class Manifest(Deserializable):
         with environment.cfg.open("w") as writer:
             parser.write(writer)
 
+        self.__post_operation()
+
     def __clean(self, path: Path, keeps: list[Path]) -> bool:
         logger = getLogger(__name__)
         if path.is_dir() and all(keep.is_relative_to(path) for keep in keeps):
@@ -173,6 +177,13 @@ class Manifest(Deserializable):
                         logger.debug("Removing %s...", p)
                         p.rmdir()
         return len(listdir(path)) == 0
+
+    def __post_operation(self):
+        logger = getLogger(__name__)
+        if len(self.set_property) > 0:
+            logger.info(
+                "Please run `waydroid upgrade` to let your custom property being applied correctly."
+            )
 
     @property
     @override
