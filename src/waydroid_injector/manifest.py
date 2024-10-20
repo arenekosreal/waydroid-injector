@@ -93,6 +93,7 @@ class Manifest(Deserializable):
         srcdir.mkdir(parents=True, exist_ok=True)
         for source in self.sources:
             source.get(srcdir, self.name, self.version)
+            source.do_build(srcdir, self.name, self.version)
 
         for content in self.contents:
             content.create(
@@ -103,6 +104,9 @@ class Manifest(Deserializable):
                 environment.overlay_rw,
                 environment.user_data,
             )
+
+        for source in self.sources:
+            source.cleanup(srcdir, self.name, self.version)
 
         parser = ConfigParser()
         if environment.cfg.is_file():
