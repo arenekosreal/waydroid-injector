@@ -17,6 +17,9 @@ def destdir(tmp_path: Path) -> Path:
     """
     waydroid = tmp_path / "var/lib/waydroid"
     waydroid.mkdir(parents=True, exist_ok=True)
+    (waydroid / "overlay").mkdir(exist_ok=True)
+    (waydroid / "overlay_rw").mkdir(exist_ok=True)
+    (tmp_path / "userdata").mkdir(exist_ok=True)
     parser = ConfigParser()
     parser["waydroid"] = {"mount_overlays": "True"}
     cfg = waydroid / "waydroid.cfg"
