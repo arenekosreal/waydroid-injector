@@ -37,6 +37,8 @@ from tomlkit import value
 from tomlkit import document
 from argparse import Namespace
 from argparse import ArgumentParser
+from tomlkit.items import AoT
+from tomlkit.items import Table
 
 
 __version__ = "0.1.0"
@@ -98,8 +100,20 @@ def _main():
     )
 
     data = parse(manifest.read_text()) if manifest.exists() else document()
+    contents = data.get("contents")
+    if not isinstance(contents, AoT):
+        contents = aot()
+    for content in contents:
+        if isinstance(content, Table):
+            path = content.get("path")
+            if isinstance(path, str) and not path.startswith(prefix):
+                logger.debug(
+                    "Keeping existing item because it is not starts with prefix %s",
+                    prefix,
+                )
+                continue
 
-    contents = aot()
+        contents.remove(content)
     for r, ds, fs in srcdir.walk():
         for d in ds:
             default_mode = 0o755
