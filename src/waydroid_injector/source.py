@@ -128,6 +128,9 @@ class Source(Deserializable):
                 rmtree(target) if target.is_dir() else target.unlink()
 
     def __get_file_name(self, name: str, version: str) -> str:
+        if self.file_name is not None:
+            return self.file_name.format(name=name, version=version)
+
         url = (
             self.url.format(name=name, version=version)
             if self.url is not None
@@ -146,15 +149,9 @@ class Source(Deserializable):
             if path is not None
             else None
         )
-        file_name = (
-            self.file_name.format(name=name, version=version)
-            if self.file_name is not None
-            else default_file_name
-        )
-        if file_name is None:
+        if default_file_name is None:
             raise ValueError("Failed to get proper file name to save content.")
-
-        return file_name
+        return default_file_name
 
     @property
     @override
