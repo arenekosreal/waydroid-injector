@@ -183,7 +183,10 @@ class Manifest(Deserializable):
         logger = getLogger(__name__)
         if len(self.set_property) > 0:
             logger.info(
-                "Please run `waydroid upgrade` or `waydroid init --force` to let your custom property being applied correctly."
+                (
+                    "Please run `waydroid upgrade` or `waydroid init --force`",
+                    " to let your custom property being applied correctly.",
+                ),
             )
 
     @property
