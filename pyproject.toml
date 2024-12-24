@@ -18,6 +18,14 @@ waydroid-injector = "waydroid_injector.__main__:main"
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
+[dependency-groups]
+test = [
+    "pytest-cov>=6.0.0",
+    "pytest-ruff>=0.4.1",
+]
+scripts = [
+    "tomlkit>=0.13.2",
+]
 
 [tool.pdm]
 distribution = true
@@ -27,10 +35,6 @@ source = "file"
 path = "src/waydroid_injector/__init__.py"
 
 [tool.pdm.dev-dependencies]
-test = [
-    "pytest-cov>=5.0.0",
-    "pytest-ruff>=0.4.1",
-]
 scripts = [
     "tomlkit>=0.13.2",
 ]
